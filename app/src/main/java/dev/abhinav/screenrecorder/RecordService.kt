@@ -1,6 +1,7 @@
 package dev.abhinav.screenrecorder
 
 import android.app.Service
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
@@ -11,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Parcelable
+import android.provider.MediaStore
 import androidx.core.content.getSystemService
 import androidx.window.layout.WindowMetricsCalculator
 import dev.abhinav.screenrecorder.util.NotificationHelper
@@ -20,8 +22,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import java.io.File
+import java.io.FileInputStream
 
 @Parcelize
 data class RecordConfig(
@@ -54,6 +58,7 @@ class RecordService : Service() {
             super.onStop()
             releaseResources()
             stopService()
+            saveToGallery()
         }
     }
 
@@ -143,6 +148,27 @@ class RecordService : Service() {
             null,
             null
         )
+    }
+
+    private fun saveToGallery() {
+        serviceScope.launch {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, "video_${System.currentTimeMillis()}.mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Recordings2")
+            }
+            val videoCollection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
+            contentResolver.insert(videoCollection, contentValues)?.let { uri ->
+                contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    FileInputStream(outputFile).use { inputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+            }
+        }
     }
 
     private fun stopRecording() {
