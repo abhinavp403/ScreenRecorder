@@ -68,6 +68,7 @@ class RecordService : Service() {
         when (intent?.action) {
             START_RECORDING -> {
                 val notification = NotificationHelper.createNotification(applicationContext)
+                NotificationHelper.createNotificationChannel(applicationContext)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
                 } else {
@@ -173,6 +174,7 @@ class RecordService : Service() {
 
     private fun stopRecording() {
         mediaRecorder.stop()
+        mediaProjection?.stop()
         mediaRecorder.reset()
     }
 
@@ -192,7 +194,6 @@ class RecordService : Service() {
         mediaRecorder.release()
         virtualDisplay?.release()
         mediaProjection?.unregisterCallback(mediaProjectionCallback)
-        mediaProjection?.stop()
         mediaProjection = null
     }
 
