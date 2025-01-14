@@ -3,6 +3,7 @@ package dev.abhinav.screenrecorder
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
@@ -52,6 +53,7 @@ class RecordService : Service() {
         override fun onStop() {
             super.onStop()
             releaseResources()
+            stopService()
         }
     }
 
@@ -70,8 +72,7 @@ class RecordService : Service() {
                 startRecording(intent)
             }
             STOP_RECORDING -> {
-                releaseResources()
-                _isRunning.value = false
+               stopRecording()
             }
         }
         return START_STICKY
@@ -90,6 +91,11 @@ class RecordService : Service() {
 
         mediaProjection = mediaProjectionManager?.getMediaProjection(config.resultCode, config.data)
         mediaProjection?.registerCallback(mediaProjectionCallback, null)
+
+        initializeRecorder()
+        mediaRecorder.start()
+
+        virtualDisplay = createVirtualDisplay()
     }
 
     private fun getWindowSize(): Pair<Int, Int> {
@@ -125,20 +131,43 @@ class RecordService : Service() {
         }
     }
 
+    private fun createVirtualDisplay(): VirtualDisplay? {
+        val (width, height) = getWindowSize()
+        return mediaProjection?.createVirtualDisplay(
+            "ScreenRecord",
+            width,
+            height,
+            resources.displayMetrics.densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            mediaRecorder.surface,
+            null,
+            null
+        )
+    }
+
+    private fun stopRecording() {
+        mediaRecorder.stop()
+        mediaRecorder.reset()
+    }
+
+    private fun stopService() {
+        _isRunning.value = false
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         _isRunning.value = false
         serviceScope.coroutineContext.cancelChildren() //don't cancel scope itself, only cancel all coroutines launched in the service scope
-        releaseResources()
     }
 
     private fun releaseResources() {
+        mediaRecorder.release()
+        virtualDisplay?.release()
         mediaProjection?.unregisterCallback(mediaProjectionCallback)
         mediaProjection?.stop()
         mediaProjection = null
-        virtualDisplay?.release()
-        virtualDisplay = null
-        mediaRecorder.reset()
     }
 
     companion object {
